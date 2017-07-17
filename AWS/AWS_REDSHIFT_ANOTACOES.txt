@@ -1,0 +1,5 @@
+REDSHIFT
+==========
+É a solução de DW da amazon.
+Suporta diversas ferramentas de BI (Pentaho, Tableau e etc)
+A sua performance se baseia e armazenar os dados de forma colunar e distribuir em diversos nós, para que assim quando for realizada a query, esta query consegue paralelizar as informações.

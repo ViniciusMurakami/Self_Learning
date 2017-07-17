@@ -1,0 +1,4 @@
+Serviço para computar os dados de acordo com a necessidade da aplicação. 
+Ele de forma automágica, controla os recursos e roda o seu código sob demanda. 
+Ou seja, ele trabalhar sob workload de forma rápida e espontânea.
+Suporta Java e Node.JS para as funções criadas no AWS Lambda

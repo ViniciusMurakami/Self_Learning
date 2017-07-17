@@ -1,0 +1,385 @@
+SOLR
+-------------------------------------------
+Solr Cloud = Versão clusterizada do Solr
+Solr StandAlon = API para busca
+Apache Lucene = Biblioteca Java para busca.
+
+Arquitetura = O solr não possui um master daemon, um dos daemons é eleito como master.
+Um indice inteiro é chamado de Collection (pode conter diversas fontes). Na versão standalone é chamado de CORE.
+Uma collection é quebrada em vários shards e distribuida no cluster.Ele possui sua propria replicação.
+
+
+Busca
+--------------------------------------------
+- Para realizar uma busca por um campo especifico.
+Ex: field:value
+
+- Para realizar um termo com espaço no meio.
+Ex: comments:"sound quality"
+
+- Para realizar busca que contém algum caracter de escape, use o \
+- Para realizar busca que contém range de numeros.
+Ex: field:[1 TO 3] ou field:[* TO 3] = 1 ATÉ 3 INCLUSIVE.
+field:{1 TO 3} = 1 a 3 exclusive, aqui só retorna 2.
+- A busca por datetime usa o formato ISO 8601.
+Ex: posted_at:["2014-10-01T00:00:00Z" TO "2014-10-31T11:59:59Z"]
+- Para realizar uma busca com condicional.
+Ex: 
+rating:1 AND state:NY
+rating:1 OR state:NY
+NOT state:CA
+state:CA AND (rating:5
+OR comments:good)
+- Para realizar uma busca similar o Like do SQL.
+Ex: 
+state:N?
+state:An*
+c*:D*
+- Para realizar um REGEX.
+Ex: product:/.*[0-9]{2,3}[MG]B.*/%
+- Para realizar uma busca com lógica fuzzy
+Ex: 
+This product is great
+This product is grate
+comments:great~ 
+O til acima representa a quantidade de caracteres que podem ser confundidos.
+comments:great~1: Serviria para great,greet,e greta
+comments:great~2: Serviria para grate e geart.
+- Para realizar uma busca que encontre palavras aproximadas.
+Ex: comments:"great printer"~2
+Aqui ele vai procurar as duas palavras great/printer com no max. duas palavras entre elas. Essas duas palavras que distanciam a nossa busca, nós chamamos de slop. 
+Além disso, a busca acima não vai necessariamente procurar na ordem especificada. Ou seja, não vai trazer sempre o great antes do printer.
+
+
+- Para ordenar a busca, basta ir na caixa sort.
+Ex: rating DESC,state ASC
+- Para retornar somente alguns campos especificos na busca, é necessário alterar o parametro fl (field list).
+Ex: fl: state, customer
+
+- Para buscar os dados com maior relevancia. É necessário adicionar na field list o campo score.
+Ex: fl: *,score.
+
+- Como estabelecer um WHERE nas minhas buscas? Utilizar o campo FQ Filter Query.
+Ex: fq: !comments:”low cost”
+
+- Como funciona o interpretador de queries (Query Parser)? Para definir outro query parser, é necessário utilizar o param defType.
+Ex: dismax
+	- parametro qf (Query field) = filtra somente nos campos especificados.
+	- parametro mm (Minimum Match) = Qtd minima de termos que devem aparecer.
+    edismax (tem o comportamento similar ao dismax).
+
+- Como utilizar funções na query do SOLR?
+Ex: fl=itemname, total:product(price, quantity, sum(1, $taxRate))
+
+- Como utilizar parametros na URL do SOLR?
+Ex: {!dismax qf='comments'}laptop -RAM 
+
+- Como o SOLR trabalha com dados GEO?
+Ex: geodist (função na query) = *, distance:geodist(location, 38.64,-90.27)
+    geofilt (filtro na query) = {!geofilt sfield=location pt=38.64,-90.27 d=5}
+
+- Como funciona o facet do SOLR? (Set facet=true)
+Ex: facet.field = STATE
+		
+
+Como indexar os dados?
+-----------------------------------------------
+- Existem 3 modos de indexar:
+1 - Batch index para dados estaticos no HDFS 
+2 - Near Real Time index para dados inputados pelo flume (ciclo Le Dados - Flume Solr Sink - Cria indice/atualiza indice - HDFS)
+3 - Indexando o HBase com o Lily (ciclo batch HBASE - Hbase Indexer Tool - Cria Indice - HDFS)
+				 (ciclo NRT HBASE - Lily Indexer - Atualiza Indice - HDFS)
+Ler sobre a arquitetura de cada um, nas paginas 152 a 154
+
+- Como gerar as collections?
+Passo a passo
+1 - É necessário gerar os arquivos de configuração de um template.
+2 - Editar o arquivo de configuração de acordo com o dadao indexada
+3 - Enviar os arquivos de configuração para o Zookeeper.
+4 - Criar uma collection para indexar os dados
+
+O comando de administração do SOLR é o solrctl.
+
+Para gerar a pasta com os arquivos de configuração é necessário rodar o comando:
+Ex: solrctl instancedir --generate /home/training/config_solr
+
+Feito isso, é necessário editar o arquivo de definição de schema do solr. 
+/home/training/config_solr/config/schema.xml
+
+Depois disso, é necessário subir os arquivos de configuração no zookeeper com o comando.
+solrctl --zk vmpochadoop02:2181,vmpochadoop03:2181,vmpochadoop04:2181/solr instancedir --create mycollection /tmp/solr_config
+
+Após subir os arquivos de configuração. É necessário criar a collection.
+solrctl --zk 10.129.251.65:2181,10.129.251.66:2181,10.129.251.67:2181/solr collection --create mycollection -s 1 -r 1
+O parametro s é a qtd de shards
+O parametro r é a qtd de replicas
+
+Caso seja necessário deletar a collection ou a instancia 
+solrctl --zk 10.129.251.65:2181,10.129.251.66:2181,10.129.251.67:2181/solr collection --delete mycollection
+
+solrctl --zk host.example.com:2181/solr instancedir --delete my_collection
+
+Schema.xml
+----------------------------
+-Datatypes
+Ler as paginas 163 e 164.
+
+-Tipos dinamicos.
+<dynamicField name="file_*" type="string"
+indexed="true" stored="true"/>
+
+-Copy Field
+<fields>
+<field name="id" type="string" indexed="true" stored="true"/>
+<!-- many other fields would be also defined here -->
+<field name="text" type="text_en" indexed="true"
+stored="false" multivalued="true"/>
+<field name="_version_" type="long" indexed="true" stored="true"/>
+</fields>
+<copyField source="firstname" dest="text" />
+<copyField source="lastname" dest="text" />
+<copyField source="skills" dest="text" />
+
+-PK ou Unique Field
+<uniqueKey>id</uniqueKey>
+
+ETL no SOLR
+-----------------------------------------------------
+Usando o Morphilines através de um arquivo de conf.
+Ler da pag 175 a 189
+
+Batch index para dados estaticos no HDFS
+-----------------------------------------------------
+Ciclo 
+	Input Dados 
+	HDFS 
+	Job MapReduceIndexerTool 
+	Cria Indice 
+	Grava Indice HDFS
+
+- MapReduceIndexerTool
+Para realizar a indexação dos dados via batch HDFS, usar o MapReduceIndexerTool.
+Ex: Execução do MapReduceIndexerTool
+hadoop jar /usr/lib/solr/contrib/mr/search-mr-*-job.jar \
+org.apache.solr.hadoop.MapReduceIndexerTool \
+-D 'mapred.child.java.opts=-Xmx500m' \
+--zk-host host.example.com:2181/solr \
+--collection my_collection \
+--morphline-file morphlines.conf \
+--go-live \
+--output-dir hdfs://nn.example.com:8020/tmp/bob/my_output \
+hdfs://nn.example.com:8020/user/bob/my_data
+A ultima linha representa os dados que vão ser indexados
+A opção go-live faz o deploy dos shards para o SolrCloud
+
+É possível também indexar várias fontes de uma vez só.
+hadoop jar /usr/lib/solr/contrib/mr/search-mr-*-job.jar \
+org.apache.solr.hadoop.MapReduceIndexerTool \
+--zk-host host.example.com:2181/solr \
+--collection my_collection \
+--morphline-file morphlines.conf \
+--go-live \
+--output-dir hdfs://nn.example.com:8020/tmp/bob/my_output \
+--input-list hdfs://nn.example.com:8020/user/bob/uri_list.txt
+A ultima linha contém um arquivo txt com várias URI's com o caminho das fontes a serem indexadas.
+
+-HDFSFindTool
+hadoop jar /usr/lib/solr/contrib/mr/search-mr-*-job.jar \
+org.apache.solr.hadoop.HdfsFindTool \
+-find /user/bob \
+-type f \
+-name '*.csv' \
+-mmin -60 > recently_modified_csv_files.txt
+O comando acima procura um arquivo csv recentemente modificado no HDFS.
+
+É possível também fazer uma pipeline com a saída do HDFSFindTool + MapReduceIndexerTool
+hadoop jar /usr/lib/solr/contrib/mr/search-mr-*-job.jar \
+org.apache.solr.hadoop.HdfsFindTool \
+-find /user/alice -type f -name '*.json' \
+-size +10000000c -size -25000000c \
+| hadoop jar /usr/lib/solr/contrib/mr/search-mr-*-job.jar \
+org.apache.solr.hadoop.MapReduceIndexerTool \
+--zk-host host.example.com:2181/solr \
+--collection my_collection \
+--morphline-file morphlines.conf \
+--go-live \
+--output-dir hdfs://nn.example.com:8020/tmp/alice/my_output \
+--input-list -
+
+-Comando para remover um documento especifico 
+curl \
+http://nn.example.com:8983/solr/my_collection/update/?commit=true \
+-H "Content-Type: text/xml" \
+--data-binary '<delete><query>id:1234</query></delete>'
+
+-Comando para limpar o indice e re-indexar todos os documentos.
+solrctl --zk nn.example.com:2181/solr \
+collection --deletedocs my_collection
+
+Near Real Time Indexing with Flume
+---------------------------------------------------
+O Flume possui agents que trazem os dados para dentro do cluster.
+O Agent é composto por 3 componentes:
+1 - Source: Le os dados (ex: syslogtcp, netcat, spoolDir)
+2 - Channel: Carrega os dados (ex: memory, file)
+3 - Sink: Escreve os dados. (hdfs, hbase e morphlineSolrSink)
+Ex: de um arquivo de config de um agent Flume
+agent1.sources = src1
+agent1.sinks = sink1
+agent1.channels = ch1
+
+agent1.channels.ch1.type = memory
+
+agent1.sources.src1.type = spooldir
+agent1.sources.src1.spoolDir = /var/flume/incoming
+agent1.sources.src1.channels = ch1
+
+agent1.sinks.sink1.type = hdfs
+agent1.sinks.sink1.hdfs.path = /user/training/logdata
+agent1.sinks.sink1.channel = ch1
+
+- Como indexar os dados no Solr via Flume?
+É necessário seguir 4 passos
+1 - Criar o schema, instance e collection
+2 - Criar o arquivo de config do Morphline
+3 - Criar o arquivo de config do Flume
+4 - Startar o agent do flume
+
+Indexandos dados com o Hbase Lily
+----------------------------------------------
+É possível realizar a indexação dos dados via Batch Mode ou Lily NRT
+
+-Batch Mode
+Configurar o arquivo xml indexador do Hbase
+Ex: 
+<?xml version="1.0"?>
+<indexer
+table="marketresearch"
+mapper="com.ngdata.hbaseindexer.morphline.MorphlineResultToSolrMapper"
+mapping-type="row">
+<param name="morphlineFile" value="morphlines.conf"/>
+</indexer>
+Configurar o morphline e executar o jar.
+Ex: 
+hadoop jar \
+/usr/lib/hbase-solr/tools/hbase-indexer-mr-*-job.jar \
+--zk-host host.example.com:2181/solr \
+--collection marketresearch_collection \
+--hbase-indexer-file indexer-config.xml \
+--go-live
+
+Lily NRT
+Ele requer que o Hbase esteja com replicação para cada familia de colunas que serão indexadas.
+Configurar o arquivo xml /etc/hbase-solr/conf/hbase-indexer-site.xml
+Registrar o indexador para o Hbase
+Ex: 
+hbase-indexer add-indexer \
+--name marketresearch_indexer \
+--indexer-conf indexer-config.xml \
+--connection-param solr.zk=host.example.com/solr
+--connection-param solr.collection=marketresearch_collection \
+--zookeeper host.example.com:2181
+
+Metadados/Schema
+-----------------------------------------------
+Analyzers define o processamento do valor de um campo.
+Ex: Tokenização
+<fieldType name="text_general" class="solr.TextField"
+positionIncrementGap="100">
+<analyzer type="index">
+<tokenizer class="solr.StandardTokenizerFactory"/>
+<filter class="solr.StopFilterFactory"
+ignoreCase="true"
+words="stopwords.txt" />
+<filter class="solr.LowerCaseFilterFactory"/>
+</analyzer>
+<analyzer type="query">
+<tokenizer class="solr.StandardTokenizerFactory"/>
+<filter class="solr.StopFilterFactory"
+ignoreCase="true"
+words="stopwords.txt" />
+<filter class="solr.SynonymFilterFactory"
+synonyms="synonyms.txt"
+ignoreCase="true"
+expand="true"/>
+<filter class="solr.LowerCaseFilterFactory"/>
+</analyzer>
+</fieldType>
+
+-Como funciona o query analyzer?
+Ex: De um query Analyzer.
+1 - Definição da Linguagem Nativa. (pt-br, en-us etc)
+2 - Tokenização (quebra do termo em palavras)
+3 - Stop words (pronomes, artigos e etc), contidos no conf/lang/stopwords_en.txt
+4 - LowerCase das palavras
+5 - Transformação de nomes e palavras. Como Bob's para Bob
+6 - Word Stemming (variação de palavras para uma forma singular, como counting e counted para count)
+
+-Detalhes do Word Stemming
+Ele funciona com base em algum algoritimo (ex: Porter), porém no SOLR existe o conceito de palavras protegidas, onde o Steamming não altera o contexto.
+Estas palavras estão listadas em conf/protwords.txt
+
+-Como trabalhar com várias linguas.
+Ex:
+<fields>
+<field name="id" type="string" indexed="true" stored="true"/>
+<field name="name" type="string" indexed="true" stored="true"/>
+<field name="desc_en" type="text_en" indexed="true" stored="true"/>
+<field name="desc_es" type="text_es" indexed="true" stored="true"/>
+<field name="desc_de" type="text_de" indexed="true" stored="true"/>
+<field name="desc_ru" type="text_ru" indexed="true" stored="true"/>
+<field name="desc_ja" type="text_ja" indexed="true" stored="true"/>
+
+-Como o Cloudera Search identifica o formato do arquivo?
+Ele utiliza o Apache Tika. O apache tika extrai os metadados + texto de diferentes tipos de arquivos.
+Junto do Tika, o morphline se aproveita do SolrCell para utilizar as bibliotecas do Tika.
+
+-Para contextualização como podemos melhorar a query?
+Existe um parametro no SOLR chamado More Like This (mlt) que agrega resultados similares.
+Ex: q=id:179&mlt=true&mlt.fl=title,keywords,author&mlt.count=2
+Além disso, existe o arquivo synonyms.txt que possui sinonimos.
+
+-O que fazer em casos de escrita errada? Trazer sugestões como o google faz.
+Existe uma funcionalidade chamada Spell Checking que traduz a fonetica da palavra e tenta sugerir algumas palavras.
+Ex:
+<requestHandler name="/select" class="solr.SearchHandler">
+<lst name="defaults">
+<int name="rows">10</int>
+<str name="df">text</str>
+<str name="spellcheck">on</str>
+<str name="spellcheck.count">2</str>
+</lst>
+<arr name="last-components">
+<str>spellcheck</str>
+</arr>
+
+-Como destacar as palavras pesquisadas?
+Existe um parametro chamado hl.fl (hit highlighting)
+Ex:
+q=hive query&hl=true&hl.fl=intro,page_text,summary
+
+Ex2:
+<requestHandler name="/select" class="solr.SearchHandler">
+<lst name="defaults">
+<int name="rows">10</int>
+<str name="df">text</str>
+<str name="hl">true</str>
+</requestHandler>
+
+-Como debugar a lentidão de uma query no SOLR?
+Existe um field que disponibiliza info's sobre tempos gastos no componentes do SOLR (More Like This, Facet, Hit Highlighting e etc)
+Ex: debug=timing
+"debug":{
+"timing":{ "time":135.0,
+"prepare":{ "time":62.0,
+"query": { "time":24.0 },
+"facet": { "time":25.0 },
+"mlt": { "time":0.0 },
+"highlight": { "time":13.0 },
+},
+"process":{ "time": 73.0,
+"query": { "time":12.0 },
+"facet": { "time":57.0 },
+"mlt": { "time":0.0 },
+"highlight": { "time":3.0 }
+}}}

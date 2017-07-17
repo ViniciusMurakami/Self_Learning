@@ -1,0 +1,14 @@
+Amazon S3
+==============
+Amazon Simple Storage Service é um serviço de storage que automaticamente replica os dados e tem versionamento dos buckets criados. 
+Tem politica de control de acesso ao dado e tem possibilidade criptografia dos dados e SSL para acesso aos dados. 
+
+E quando o dado é arcaico e necesita de um custo mais barato é possível gravar esses dados no Amazon Glacier. 
+
+Seu acesso é feito através de:
+	- Amazon S3 Cli
+	- Amazon Management Console
+
+Podemos fazer uma analogia aos dados no S3 como:
+	- Arquivos = Objetos no S3
+	- Pastas = Buckets no S3

@@ -1,0 +1,76 @@
+Kafka Entendimento 
+=====================
+
+Topic 
+--------------------------
+Como se fosse uma tabela de BD
+Replication-factor deve ser entre 2 ou 3 (para que cada particao seja replicada 2-3)
+
+Partition
+--------------------------
+Pedaco de uma tabela (nao ha limites de particao por tabela) 
+Quanto + particao = + paralelismo
+
+Lider Particao
+---------------------------
+Quando temos a distribuicao das particoes, somente um broker e eleito como lider. As outras replicas sao chamadas de ISR (in sync replicas) e recebem a particao do lider.
+
+Offset
+--------------------------
+ID da Mensagem de uma particao de um topico (incremental)
+Offset tem significado somente para a particao. 
+A ordem e garantida somente dentro de uma particao
+
+Dados 
+--------------------------
+Os dados sao mantidos por 2 semanas (default)
+Os dados sao imutaveis! (que nem no hdfs)
+Os dados sao providos de forma randomica para uma particao (a nao ser que se passe uma chave)
+
+Brokers 
+--------------------------
+Servers de Kafka 
+Identificado por um ID
+Cada broker detem topics
+A forma de conexao com um broker e atraves de um dos brokers disponiveis (chamado bootstrap server). Feito isso, vc esta conectado ao cluster de kafka.
+Boas praticas comecam com 3 brokers ate 100 brokers
+
+Producers
+--------------------------
+Funcao: Escreve dados para topicos.
+Modo de usar: Precisa de um topico, um broker para se conectar e o kafka roteia as mensagens para os brokers.
+Controle de ACKS (acknowledgment): 
+	- Acks = 0 : Producer nao espera o aceite (possivel perda de dados)
+	- Acks = 1 : Producer espera o lider aceitar (pequena chance de perda de dados)
+	- Acks = All : Leader + Replicas aceitam (nao ha perda de dados)
+Message Key : Ao se colocar uma chave junto na mensagem, se garante a ordem para uma chave (ex: id_venda) e tambem garante a escrita para a mesma particao sempre.
+
+Consumers
+----------------------------
+Funcao: Le dados de um topico
+Modo de usar: Necessita de um topico, um broker para se conectar e o kafka faz pulling dos dados dos brokers.
+Ordenacao: Dado e lido na ordem do offset de cada particao. Ou seja, se houverem 2 particoes, ele le em paralelo mas garante a ordem de leitura dentro de cada particao. Portanto os dados entre as particoes nao sao ordenados!!!!!
+Consumer Groups : Os consumers sao organizados em consumer groups, cada consumer dentro do grupo, le de uma particao especifica. Nao pode ter mais consumers do que particoes!
+Consumer Offsets: O Kafka armazena os offsets lidos por um consumer group em um topico chamado _consumer_offsets. Ou seja, quando o processo morre, ele le desse topico para saber de onde parou (commit offset)
+
+Zookeeper 
+----------------------------
+Funcao: Elege o lider e assina uma particao para o lider.
+		Manda notificao de alteracoes (novo topico, broker morto, broker de volta, topico deletado) e compartilha a configuracao com os brokers
+Tem um lider e o resto sao chamados de followers
+O Kafka Cluster conversa com o ZK Lider. 
+
+
+Kafka Garantias
+----------------------------
+Garante a entrega da mensagem na ordem que foram publicadas (Fila Distribuida!)
+Conta de padeiro! O Kafka funciona com a seguinte conta: Replication-Factor N - 1.
+Se vc ordenar (message key) para um topico com o numero X de particao, e de repente precisa aumentar o numero de particoes para aquele topico. As mensagens sao enviadas para a mesma particao! Ou seja, ele nao faz load balance de message key (caso vc tenha feita a escolha errada da chave - -')
+
+Entrega dos dados Consumers!
+-----------------------------
+O consumer escolhe quando comitar o offset.
+Portanto, temos algumas garantias de entregas:
+- At Most Once : Offsets sao comitados assim que sao entregues (nao quer dizer que foram processados), se algo acontece com o consumer, os dados sao perdidos.
+- At Least Once: Offsets sao comitados depois da entrega/processamento das mensagens. Se algo acontece durante o processamento, pode acontecer o producer ler o mesmo dado de novo.. Para isso e necessario garantir que o sistema de processamento garante a deduplicidade do dado.
+- Exactly Once: Muito dificil de se aplicar, vale a pena estudar a aplicabilidade do RocksDB.

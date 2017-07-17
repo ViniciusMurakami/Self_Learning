@@ -1,0 +1,180 @@
+Spark
+----------------------
+########################################################################################
+Anotações
+########################################################################################
+Spark Context -> É o ponto de entrada para o cluster (como se fosse um appMaster)
+RDD -> É o dataset que programamos no Spark, eles são imutáveis!
+Operações com RDD:
+	-> Ações: Retorna valores. Ex. Count, Take, Collect e SaveAsTextFile
+	-> Tranformações: Cria um novo RDD a partir de outro. Ex. Map, Filter
+
+Lazy Execution -> Os dados dentro de um RDD só são processados, quando uma ação no final é executada. Ou seja, quando o fluxo do dataflow acaba.	
+
+PairRDD -> Tipo especial de RDD que guarda key/value, muito usado para algoritmos MapReduce. Funções usadas para criar um PairRDD: MAP, FLATMAP/FLATMAPVALUES e KEYBY
+
+Spark Driver -> É o programa "main" que cria o Spark Context, e lança o sc para o Cluster Manager que distribui as tarefas para os executors.  Pode ser através de um Spark-shell/pyspark ou através de Spark App 
+
+Arquitetura Spark StandAlone:
+	- Spark Master : Gerencia app's e distribui as tasks para o Spark Workers
+	- Spark Worker : Lança os executors e monitora-os
+
+Particionamento RDD -> Os rdd's são particionados no cluster (isso é automático, porém é possível setar a qtd de particionamento). Ex. textFile(file, minPartitions). Existem algumas funções que se aplicam a partições como : foreachPartition, mapPartitions e mapPartitionsWithIndex.
+Além disso, existem funções que preservam as partições (map, flatMap, filter) e outras reparticionam (reduce, sort, group)
+
+Stages -> São conjuntos de tasks que podem ser executadas em paralelo (que nem no job MR). Existem dois tipos de operações:
+	- Narrow : Dependência de 1 filho de um RDD, podem ser agrupadas em uma stage. Ex: map, filter, union
+	- Wide : Várias dependencias de um 1 rdd, define uma nova stage. Ex: reduceByKey, join, groupByKey
+
+DAG -> O Spark constrói DAG's de acordo com as dependencias dos RDD's
+
+#######################
+Caching/Persistence
+#######################
+LineAge -> A linhagem de um RDD só é processada a partir de uma action (não de um transform). E toda vez que uma ação re-executa a linhagem, todo o processo é re-executado do inicio. Para não acontecer isso, é possível cachear um dos rdd's. Quando fazemos o cache de uma partição, o cache é salvo na memória do executor (JVM). Ex. meuRDD.cache()
+Leveis de persistencia -> Existem dois métodos para persistir. 
+	- Cache : Persiste em memória
+	- Persist : Ofecere outras formas de persistência
+		- Storage Location:
+			- MEMORY_ONLY : Igual ao cache
+			- MEMORY_AND_DISK(spilling) : Armazena no disco caso a partição não caiba na memória
+			- DISK_ONLY : Armazena toda a partição no disco. (Aqui ele cria um arquivo com os dados no HDFS)
+		- Replication:
+			- MEMORY_ONLY_2, MEMORY_AND_DISK_2 : Armazena a partição em 2 nodes (Aqui ele cria um arquivo com os dados no HDFS)
+		- Serialization:
+			- MEMORY_ONLY_SER, MEMORY_AND_DISK_SER : Serializa os dados na memória, eficiente no armazenamento dos dados em memória, porém perdemos performance.
+CheckPoint -> Em casos onde a linhagem do RDD é muito extensa, é possível fazer um checkpoint dos dados no HDFS (a linhagem não é salva!) e precisa ser salva antes de qualquer ação. 
+ 	
+	
+########################################################################################
+Comandos
+########################################################################################
+sc.appName: Nome do Spark Context
+sc.textFile("caminho + nome do arquivo") : Arquivos no RDD
+meuRDD.count() : Conta a quantidade de linhas no RDD
+meuRDD.take(n) : Traz n registros do RDD
+meuRDD.collect() : Traz todos os elementos do RDD
+meuRDD.saveAsTextFile(file) : salva o RDD para um arquivo
+map(line => line.toUpperCase) : Exemplo de um map em Scala
+filter(line => line.startsWith('I')) : Exemplo de um filter em Scala
+map(lambda line : line.toUpperCase) : Exemplo de um map em Python
+filter(lambda line : line.startWith('I')) : Exemplo de um filter em Python
+meuRDD = sc.parallelize(collection) : função que leva uma coleção para um RDD
+sc.textFile(arquivo).flatMap(lambda line: line.split()).distinct() : Exemplo de um arquivo + split + flat de conteúdo para varias linhas + distinct dos valores em Python
+sc.textFile(arquivo).flatMap(line => line.split("\\W")).distinct() : Exemplo de um arquivo + split + flat de conteúdo para varias linhas + distinct dos valores em Scala
+users = sc.textFile(file).map(lambda line: line.split('\t')).map(lambda fields: (fields[0],fields[1]))  : Criando um PairRDD em Python
+val users = sc.textFile(file).map(line => line.split('\t')).map(fields => (fields(0),fields(1))) : Criando um PairRDD em Scala
+sc.textFile(logfile).keyBy(lambda line: line.split(' ')[2]) : Definindo a chave do RDD em Python
+sc.textFile(logfile).keyBy(line => line.split(' ')(2)) : Definindo a chave do RDD em Scala
+counts = sc.textFile(file).flatMap(lambda line: line.split()).map(lambda word: (word,1)).reduceByKey(lambda v1,v2: v1+v2) : Exemplo de um count simulando um algoritmo MapReduce no Spark em Python
+val counts = sc.textFile(file).flatMap(line => line.split("\\W")).map(word => (word,1)).reduceByKey((v1,v2) => v1+v2) : Exemplo de um count simulando um algoritmo MapReduce no Spark em Scala
+val counts = sc.textFile(file).flatMap(_.split("\\W")).map(_,1)).reduceByKey(_+_) : Exemplo de um count simulando um algoritmo MapReduce no Spark em Scala com parametro anonimo
+
+MASTER=spark://masternode:7077 pyspark : Exemplo de chamada pyspark apontando a URL para o cluster manager
+spark-shell --master spark://masternode:7077 : Exemplo de chamada spark-shell apontando a URL para o cluster manager 
+spark.default.parallelism 10 : parâmetro que aumenta o paralelismo 
+
+Comandos de Particionamento
+-----------------------------
+sc.textFile("meuArq",3) : quebra o meu arq em no minimo 3 partições.
+sc.textFile("meuArq/*") : cada arquivo é no minimo 1 partição. 
+sc.wholeTextFiles("meuDir") : para arquivos pequenos, ele transforma cada dir em 1 particionamento (cria um PairRDD, key = filename / value = file contents)
+ 
+Comandos encadeados
+--------------------
+sc.textFile("purplecow.txt").map(lambda line: line.upper()).filter(lambda line: line.startswith('I')).count()  : Um conjunto de operações conectadas, ou seja uma operação fazendo join com a outra.
+
+
+Exemplo de Count JPBg Requests por Arquivos
+--------------------------------------------
+##Python
+def countJpgs(index,partIter):    
+	jpgcount = 0    
+	for line in partIter:       
+		if "jpg" in line: jpgcount += 1    
+yield (index,jpgcount)  
+jpgcounts = sc.textFile("weblogs/*").mapPartitionsWithIndex(countJpgs) 
+
+##Scala
+def countJpgs(index: Int, partIter:   
+Iterator[String]): Iterator[(Int,Int)] = {     
+	var jpgcount = 0     
+	for (line <- partIter)          
+		if (line.contains("jpg")) jpgcount += 1     
+	Iterator((index,jpgcount))   
+}
+jpgcounts = sc.textFile("weblogs/*").mapPartitionsWithIndex(countJpgs)
+
+
+Exemplo de Average Word Length by Letter
+--------------------------------------------
+##Python
+avglens = sc.textFile(file).flatMap(lambda line: line.split()).map(lambda word: (word[0],len(word))).groupByKey().map(lambda (k, values): (k, sum(values)/len(values)))
+
+Exemplo de um RDD em cache
+-----------------------------
+##Python
+mydata = sc.textFile("purplecow.txt") 
+myrdd = mydata.map(lambda s: s.upper()) 
+myrdd.cache() 
+myrdd2 = myrdd.filter(lambda s:s.startswith('I')) 
+myrdd2.count()
+myrdd2.count() ##Tende a retornar mais rápido por causa do cache
+
+Exemplo de persistência da partição de um RDD
+----------------------------------------------
+##Python
+from pyspark import StorageLevel 
+myrdd.persist(StorageLevel.DISK_ONLY)
+
+##Scala
+import org.apache.spark.api.java.StorageLevels._ 
+myrdd.persist(StorageLevels.DISK_ONLY)
+
+Exemplo da retirada da persistencia de um RDD
+-----------------------------------------------
+rdd.unpersist()
+
+Exemplo de um checkpoint
+--------------------------
+##Python
+sc.setCheckpointDir(directory) 
+myrdd = <VALOR INICIAL>
+while x in xrange(100):   
+	myrdd = myrdd.transform(…)   
+	if x % 3 == 0:      
+		myrdd.checkpoint()     
+		myrdd.count() 
+myrdd.saveAsTextFile() 
+
+Funções
+--------
+def toUpper(s):
+	return s.upper() : Exemplo de função em Python
+
+def toUppper(s: String) : String =
+	{ s.toUpperCase } : Exemplo de função em Scala 
+
+Parâmetro Anonimo
+-----------------
+meuRDD.map(_.toUpperCase()).take(2) : Exemplo de parametro anonimo em Scala -> '_'	
+
+Exercicio Extra
+-----------------
+ips=sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/2013-09-15.log").filter(lambda x: ".html" in x).map(lambda a: a.split()).map(lambda linha: (linha[0],linha[2]))
+for (i,b) in ips.take(10): print i+"/"+b
+
+Exercicio Working with Pair RDD's
+-----------------------------------
+##1) Using MapReduce, count the number of requests from each user.
+sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").map(lambda x: x.split() [2]).map(lambda word: (word,1)).reduceByKey(lambda v1,v2: v1 + v2)
+
+##2)Display the user IDs and hit count for the users with the 10 highest hit counts.
+
+
+
+##########
+Site
+##########
+--Labs
+http://clouddatalab.com/index.html

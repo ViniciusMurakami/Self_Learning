@@ -1,0 +1,78 @@
+[-]GIT 
+https://www.codeschool.com/learn/git
+https://cursos.alura.com.br/course/git
+https://www.codecademy.com/learn/learn-git
+
+Um projeto no GIT é composto de 3 partes:
+	- Working Directory: Onde acontece a edição/deleção
+	- Staging Area: Onde adicionamos os arquivos a serem comitados
+	- Repository: Onde acontece o commit e é armazenado a última versão.
+
+#Comando para start um repositório (criar o .git)
+git init
+
+#Comando para averiguar o status de novos arquivos ou possiveis alterações
+git status 
+
+#Comando para adicionar novo arquivos na "staging area" (area antes de comitar)
+git add <arquivo> 
+
+#Comando para dar commit (o parâmetro -m adiciona uma mensagem) 
+git commit -m "Add cute octocat story"
+
+#Comando para adicionar vários arquivos ao mesmo tempo, usando WildCards
+git add '*.txt'
+
+#Logs do Git 
+git log
+
+#Comando para adicionar um git remoto 
+git remote add origin https://github.com/try-git/try_git.git
+
+#Dar o commit dos dados do branch local master para o servidor 
+git push -u origin master
+
+#Comando para pegar os dados novos/alterados no server para o local
+git pull origin master
+
+#Comando para ver a diferença entre arquivos
+git diff HEAD
+
+#Comando para ver a diferença entre os arquivos na staged
+git diff --staged
+
+#Comando zerar (remover) os arquivos da stage
+git reset octofamily/octodog.txt
+
+#Comando voltar uma versão de commit via reset usando o SHA de um commit (pegar somente as 7 primeiras letras/numeros)
+
+
+#Comando para "undo" das alterações desde o último commit
+git checkout -- <target>
+
+#Criando branch (cópias)
+git branch clean_up #nome da cópia 
+
+#Ver as branchs (e ver qual está setada)
+git branch 
+
+#Comando para trocar a branch 
+git checkout clean_up #nome da cópia 
+
+#Limpar e eliminar os arquivos 
+git rm '*.txt'
+
+#Comando para fazer o merge de uma branch para a default 
+git merge clean_up #nome da cópia
+
+#Comando para deletar uma branch 
+git branch -d clean_up #nome da cópia
+
+#Comando para ver os detalhes de alteração de um repositório
+git whatchanged -p 
+
+#Comando para adicionar um branch remota para a local
+git branch -t design origin/design
+
+#Comando que verifica as atualizações no repositório de atalho origin
+git fetch origin

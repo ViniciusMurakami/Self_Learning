@@ -1,0 +1,4 @@
+Amazon DynamoDB
+==================
+É o database NOSQL da AMAZON.
+Ele faz o backup dos dados 

@@ -1,0 +1,174 @@
+HBASE
+---------------
+Os dados são gravados em tabelas que são distribuidas no clusters (em blocos no HDFS)
+
+Regions são seções de uma tabela. (como se fosse uma partição da tabela)
+As regions são distribuidas através dos daemons (RegionServer). Cada RegionServer distribui diversos regions de varias tabelas.
+O RegionServer seria o Datanode do HDFS ou o NodeManager do YARN
+
+O Hbase Master coordena que RegionServer vai gerenciar cada Regions.
+Cuida da criação de novas tabelas e outras operações de Housekeeping.
+
+O Hbase trabalha com versionamento das linhas. Por padrão este valor é = 3.
+
+Hbase Shell (roda comandos em JRuby)
+Os parametros são declarados com ''.
+Os parametros avançados do Ruby são declarados com o que eles chamam de hash rocket =>
+Ex:
+hbase> create 'table', {NAME => 'cf1', VERSIONS => 5}
+
+O Hbase nao possui o conceito de databases separados. Tudo fica no mesmo namespace.
+
+ADMIN Comandos
+--------------
+Comandos de ADMIN no Hbase
+- list
+- describe 'tablename'
+- disable 'tablename' = MUITO LEGAL ESSE COMANDO, DEIXA A TABELA EM SAFE MODE PARA MANUTENCAO
+- enable 'tablename' = RETORNA O ACESSO DOS CLIENTS A TABELA
+
+OBS: o processo de alteração do metadado da tabela, necessita que ela entre em modo de manutenção. (somente o comando truncate nao necessita que ela entre em modo de manutencao)
+
+- drop  'tablename' (necessita do disable antes)
+- truncate 'tablename' 
+- alter 'tablename', NAME => 'newcolfam' (add uma nova coluna a uma familia de colunas)
+- alter 'tablename', NAME => 'colfam', METHOD => 'delete' (deleta uma familia de coluna)
+- alter 'tablename', NAME => 'colfam', VERSIONS => 5 (modifica uma familia de colunas)
+
+Acessando dados do Hbase
+-------------------------
+Existem duas formas de acessar os dados (além do java API).
+Thrift ou REST
+E para ad-hoc queries existe o Hbase shell
+
+Todas as conexões utilizam a classe HTableInterface 
+
+Apache Thrift
+-------------
+Framework de multi-language
+
+
+Comandos HBASE
+--------------
+GET - Retorna uma linha de acordo com a rowkey
+SCAN - Retorna todas as linhas (pode ser filtrada)
+PUT - Insere uma linha de acordo com a rowkey (pode inserir multiplas linhas)
+DELETE - Deleta a linha de acordo com a rowkey (lembrando q a deleção fisica so acontece momentos depois)
+INCREMENT - ATOMIC COUNTER?
+
+Coprocessors
+-------------
+Existem dois tipos de coprocessor, o Endpoint e o observer.
+
+O endpoint é similar a stored procedure 
+O observer funciona como se fosse uma trigger. Ou seja, ele fiscaliza a comunicação entre os regionserver e o cliente. (ele utiliza métodos pre e post)
+
+Filters
+---------------
+O filter são compostos por:
+ByteArrayComparable = define como filtrar os dados
+CompareOp = como validar a comparação.
+
+Tabelas internas (catalogo)
+----------------------------
+-ROOT = Possui os endereços das tabelas META
+-META = Possui os endereços dos regions.
+
+Armazenamento do Hbase
+----------------------
+O Hbase grava as tabelas no HDFS no formato. HFile
+
+Como funciona a escrita no Hbase?
+---------------------------------
+1) O Client envia a requisição de escrita ao RegionServer. 
+2) O RegionServer escreve no Write-Ahead-Log (caso alguma merda aconteça, ele consegue se recuperar através dos logs)
+3) Depois da escrita, o RegionServer escreve na memória da coluna de familia (o memstore).
+4)Assim, que possivel o memstore grava essas infos no disco.
+
+Tipos de Arquivo Hbase
+----------------------
+Possui dois tipos, o de dados e log.
+HLog - Usado para armazenar os logs do WAL. Grava as HLogKeys que são usadas para persistir os dados em caso de DR.
+HFile - São quebrados em blocos de 64KB. 
+Pequenos blocos performam acesso randomico
+Grandes blocos performam acesso scan
+
+Gravação dos dados do Memstore ao disco
+----------------------------------------
+Os dados em memória são gravados qdo
+- hbase.regionserver.global.memstore.upperLimit atinge a capacidade
+- hbase.hregion.memstore.flush.size alcança a capacidade
+- hbase.hregion.preclose.flush.size alcança a capacidade e fecha.
+
+Leitura dos dados do Memstore ao disco
+----------------------------------------
+O cliente envia a requisição a RegionServer que le os store file + memstore e guarda esses dados em block cache. O block cache retorna os dados ao cliente.
+
+BLOCK CACHE X MEMSTORE
+- O block cache é um cache de leitura
+- O Memstore é um cache de escrita.
+
+Region Split
+-------------
+Quando as regions ficam muito grandes, o Hbase cria dois arquivos de referencia.
+
+Minor Compaction
+-----------------
+Quando o Memstore realiza o flush ao disco, os arquivos Store file (que contém os dados) ficam dispersos com tamanhos pequenos se comparados aos outros Store File. O processo responsável por compacta-los em um só, é o Minor Compaction.
+
+Major Compaction
+-----------------
+Ele é o garbage collector de versões de linhas. Ou seja, as rowkeys que tiverem mais de 3 versões. Ele irá deletar as versões antigas.
+Assim como ele é também o responsável por deletar as linhas que estavam marcadas para serem deletadas.
+OBS: esse processo é lento, pois ele agrega todas as store file em uma só.
+
+Instalação
+------------
+Primeiro é necessário instalar o hbase via yum e o hbase-thrift. E também o hbase-rest caso seja necessário.
+hbase-site.xml
+hbase.rootdir -> Diretorio do HDFS onde os dados serão escritos.
+hbase.zookeeper.quorum -> os nós do zookeeper quorum.
+hbase.cluster.distributed -> confiravel se o cluster Hbase estiver distribuido em varios nodes. (pseudo-distributed mode ou fully distributed mode)
+
+Recomendações de memória: 
+1 GB RAM JVM -> Hbase Master
+12 GB RAM até 16 GB RAM JVM -> RegionServer
+Eg. do arquivo hbase-env.sh
+export HBASE_REGIONSERVER_OPTS="-Xmx12g -Xms12g -Xmn128m
+-XX:+UseParNewGC -XX:+UseConcMarkSweepGC
+-XX:CMSInitiatingOccupancyFraction=70"
+export HBASE_MASTER_OPTS="-Xmx1000m"
+
+Recomendações de Datanode (hdfs-site.xml):
+Aumentar o valor da dfs.datanode.max.xciever para 4096. Essa propriedade define o número de arquivos que um Datanode irá servir.
+
+O Hbase possui o esquema de segurança (Grant/revoke), porém os seus parametros são similares ao chmod (RWX)
+
+Funções do HbaseMaster
+Coordenar os RegionServer
+Atualiza o META e o ROOT
+
+Load Balancer no Hbase
+Roda de 5 em 5 minutos por default
+base.balancer.period (propriedade que detém isso)
+
+
+O numero de Region por RegionServer é configurado através do tamanho max de region por regionserver.
+hbase.hregion.max.filesize
+
+Fix HBase Tool
+sudo -u hbase hbase hbck
+O comando acima funciona como o filesystem check
+Para reparar os erros
+sudo -u hbase hbase hbck -repair
+
+Replicação/BKP
+Propriedade do hbase-site.xml
+<name>hbase.replication</name>
+<value>true</value>
+
+Para habilitar a replicação nas familia de colunas. REPLICATION_SCOPE = 0 ou 1
+
+INSTALAÇÃO DO HBASE
+--------------------
+http://www.cloudera.com/content/cloudera/en/documentation/cdh4/v4-3-0/CDH4-Installation-Guide/cdh4ig_topic_20.html

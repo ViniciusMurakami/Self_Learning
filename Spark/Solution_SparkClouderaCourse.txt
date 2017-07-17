@@ -1,0 +1,127 @@
+###################
+Exercicios Spark
+###################
+
+Getting Started with RDDs
+--------------------------
+1 ) Load and view text file
+#Python
+arquivo=sc.textFile("file:/home/training/training_materials/sparkdev/data/frostroad.txt")
+arquivo.count()
+arquivo.collect()
+
+#Scala
+val arquivo=sc.textFile("file:/home/training/training_materials/sparkdev/data/frostroad.txt")
+arquivo.count()
+arquivo.collect()
+
+2) Explore the Loudacre web log files
+#Python
+sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/2013-09-15.log").map(lambda linha: len(linha)).take(5)
+
+sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/2013-09-15.log").filter(lambda linha: ".jpg" in linha).map(lambda linha: linha.split() [0]).saveAsTextFile("file:/home/training/iplist")
+
+#Scala 
+sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/2013-09-15.log").map(linha => linha.length).take(10)
+
+sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/2013-09-15.log").filter(linha => linha.contains(".jpg")).map(linha => linha.split(" ")(0)).saveAsTextFile("file:/home/training/iplist")
+
+3) Challenge 1
+#Python
+sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").filter(lambda linha: ".jpg" in linha).map(lambda linha: linha.split() [0]).saveAsTextFile("file:/home/training/iplist_full")
+
+#Scala 
+sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").filter(linha => linha.contains(".jpg")).map(linha => linha.split("  ")(0)).saveAsTextFile("file:/home/training/iplist_full")
+
+4) Challenge 2
+#Python
+ips=sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").filter(lambda linha: ".jpg" in linha).map(lambda linha: linha.split()).map(lambda linha: (linha[0],'/',linha[2]))
+
+for (ip,barra,id) in ips.take(10): print ip+barra+id
+
+#Scala 
+val ips=sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").filter(linha => linha.contains(".jpg")).map(linha => (linha.split(" ")(0),'/',linha.split(" ")(2)))
+ips.take(1).foreach(t => println(t._1 + t._2 + t._3))
+
+Working with Pair RDDs
+--------------------------
+1)
+#Python
+sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").map(lambda linha: linha.split()).map(lambda linha: (linha[2],1)).reduceByKey(lambda v1,v2: v1+v2).take(10)
+
+#Scala
+sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").map(_.split(" ")).map(x => (x(2),1)).reduceByKey(_+_).take(10)
+
+2)
+#Python
+sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").map(lambda x: x.split()).map(lambda x: (x[2],1)).reduceByKey(lambda v1,v2: v1+v2).map(lambda v: (v[1],v[0])).sortByKey(False).take(10)
+
+#Scala 
+sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").map(_.split(" ")).map(x => (x(2),1)).reduceByKey(_+_).map(_.swap).sortByKey(false).take(10)
+
+ou
+
+sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").map(_.split(" ")).map(x => (x(2),1)).reduceByKey(_+_).map(x => (x._2,x._1)).sortByKey(false).take(10)
+
+3)
+#Python
+user_id_ips=sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").map(lambda x: x.split()).map(lambda x: (x[2],x[0])).groupByKey()
+
+for (userid, ips) in user_id_ips:
+	print('User ID: ', userid)
+	for ip in ips: print '\t',ip
+
+#Scala
+val user_id_ips=sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").map(_.split(" ")).map(x => (x(2),x(0))).groupByKey()
+
+for (user_id <- user_id_ips.take(10)) {
+println("User ID: " + user_id._1)
+for (ip <- user_id._2) println("\t" + ip) }
+
+4)
+#Python
+accounts=sc.textFile("file:/home/training/training_materials/sparkdev/data/accounts.csv").map(lambda x: x.split(',')).map(lambda x: (x[0],x[1:]))
+user_counts=sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").map(lambda linha: linha.split()).map(lambda linha: (linha[2],1)).reduceByKey(lambda v1,v2: v1+v2)
+joined=accounts.join(user_counts)
+for (userid,(values,count)) in joined.take(5):
+    print "User ID:" + userid,"; Quantidade:" + str(count),"; Nome Completo:"+ values[2],values[3]
+	
+#Scala
+val accounts=sc.textFile("file:/home/training/training_materials/sparkdev/data/accounts.csv").map(_.split(',')).map(x => (x(0),x))
+val user_counts=sc.textFile("file:/home/training/training_materials/sparkdev/data/weblogs/*").map(_.split(" ")).map(x => (x(2),1)).reduceByKey(_+_)
+val joined=accounts.join(user_counts)
+
+#Exemplo de uma linha 
+Array[(String, (Array[String], Int))] = Array((34344,(Array(34344, 2012-12-17 12:21:01, \N, Michael, Herron, 1765 Kincheloe Road, Phoenix, AZ, 85340, 9289476933, 2013-12-27 15:02:35, 2013-12-27 15:02:35),8)))
+
+for (pair <- joined.take(10)) {
+	printf("User ID: %s; Quantidade:%s; Nome Completo:%s %s\n",pair._1,pair._2._2, pair._2._1(3),pair._2._1(4))
+}
+
+Challenge 1)
+#Python
+postal_code=sc.textFile("file:/home/training/training_materials/sparkdev/data/accounts.csv").map(lambda x: x.split(',')).keyBy(lambda x: (x[8]))
+
+#Scala
+val postal_code=sc.textFile("file:/home/training/training_materials/sparkdev/data/accounts.csv").map(_.split(',')).keyBy(_(8))
+
+Challenge 2)
+#Python
+postal_code=sc.textFile("file:/home/training/training_materials/sparkdev/data/accounts.csv").map(lambda x: x.split(',')).keyBy(lambda x: (x[8])).mapValues(lambda x: (x[3],x[4]))
+
+#Scala
+val postal_code=sc.textFile("file:/home/training/training_materials/sparkdev/data/accounts.csv").map(_.split(',')).keyBy(_(8)).mapValues(x => (x(3),x(4)))
+
+Challenge 3)
+#Python
+postal_code=sc.textFile("file:/home/training/training_materials/sparkdev/data/accounts.csv").map(lambda x: x.split(',')).keyBy(lambda x: (x[8])).mapValues(lambda x: (x[3],x[4])).groupByKey().sortByKey(True)
+for (cep,(grupo)) in postal_code.take(5):
+    print '---' + cep
+    for (nome,sobrenome) in grupo: 
+		print nome + ',' + sobrenome
+
+#Scala
+val postal_code=sc.textFile("file:/home/training/training_materials/sparkdev/data/accounts.csv").map(_.split(',')).keyBy(_(8)).mapValues(x => (x(3),x(4))).groupByKey().sortByKey(true)
+for (dado <- postal_code.take(5)) { 
+	printf("--- %s\n",dado._1)
+	for (nomes <- dado._2) println(nomes) }

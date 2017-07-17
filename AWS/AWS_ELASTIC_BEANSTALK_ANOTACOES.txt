@@ -1,0 +1,10 @@
+Elastic BeanStalk
+==================
+Feito para fazer deploy de soluções na nuvem
+Aceita diversas linguagens
+O BeanStalk faz o load balance, auto scaling e monitora a aplicação.
+Existem 4 formas de acessar o Elastic BeanStalk:
+	- AWS Management Console
+	- AWS Elastic BeanStalk CLI
+	- Elastic BeanStalk API
+	- Toolkit/SDK
